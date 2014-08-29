@@ -66,17 +66,16 @@ mysqli_data_seek( $years_query, 0 );
 DynamicYears("years_max", $years_query);
 ?>
 <br>
-First name: <input type="text" name="firstname"><br>
-First name: <input type="text" name="firstname"><br>
-First name: <input type="text" name="firstname"><br>
-
+Wine Stock: <input type="number" step=".01" name="stock"><br>
+Ordered: <input type="number" name="ordered"><br>
+Dollar Cost:Min: <input type="number" step=".01" name="mincost">
+Max:<input type="number" step=".01" name="maxcost"><br>
 
 <input type="submit" name="submit" value="Run Query">
 </form>
 
 <?php
 if(isset($_GET['region'])) {
-echo $_GET["region"];
 
 $get_region = $_GET["region"];
 if($get_region == 1){
@@ -97,27 +96,47 @@ $get_max_year = $_GET["years_max"];
 if($get_max_year == "Unselected"){
 $get_max_year = 4000;
 }
+$get_ordered = $_GET["ordered"];
+if($get_ordered == ""){
+$get_ordered = 0;}
+
+$get_min_cost = $_GET["mincost"];
+if($get_min_cost == ""){
+$get_min_cost = 0;}
+
+$get_max_cost = $_GET["maxcost"];
+if($get_max_cost == ""){
+$get_max_cost = 100000;}
+
+$get_stock = $_GET["stock"];
+if($get_stock == ""){
+$get_stock = 0;}
 
 
 
 
-
+echo $get_stock;
 echo $_GET["years_max"];
 echo "<br>";
 echo $get_variety;
 echo $get_region;
-$wineid = mysqli_query($con,"SELECT GROUP_CONCAT(DISTINCT grape_variety.variety SEPARATOR ', ') AS varietyz, wine.wine_id, wine.wine_name, winery.winery_name, wine.year, region.region_name, GROUP_CONCAT(DISTINCT inventory.cost SEPARATOR ', ') AS costz, inventory.on_hand, itemz.qty, itemz.price
-FROM wine, winery, wine_variety, grape_variety, inventory, region, (SELECT wine_id, SUM(qty) AS qty, SUM(price) AS price FROM items GROUP BY wine_id) AS itemz
+$wineid = mysqli_query($con,"SELECT GROUP_CONCAT(DISTINCT grape_variety.variety SEPARATOR ', ') AS varietyz, wine.wine_id, wine.wine_name, winery.winery_name, wine.year, region.region_name, GROUP_CONCAT(DISTINCT inventory.cost SEPARATOR ', ') AS costz, inventoryz.costzies, inventoryz.on_hand_corrected, itemz.qty, itemz.price
+FROM wine, winery, (SELECT DISTINCT wine_id FROM wine_variety WHERE variety_id LIKE '$get_variety') AS wine_varietyz, wine_variety, grape_variety, inventory, region, (SELECT wine_id, SUM(qty) AS qty, SUM(price) AS price FROM items GROUP BY wine_id) AS itemz, (SELECT DISTINCT wine_id, GROUP_CONCAT(DISTINCT inventory.cost SEPARATOR ', ') as costzies, SUM(on_hand) AS on_hand_corrected FROM inventory GROUP BY wine_id) AS inventoryz
 WHERE wine.winery_id = winery.winery_id
 AND wine.wine_id = itemz.wine_id
 AND wine_variety.variety_id = grape_variety.variety_id
 AND wine.wine_id = wine_variety.wine_id
 AND inventory.wine_id = wine.wine_id
+AND inventoryz.wine_id = wine.wine_id
 AND winery.region_id = region.region_id
+AND inventoryz.on_hand_corrected >= '$get_stock'
 AND region.region_id LIKE '$get_region' 
-AND grape_variety.variety_id LIKE '$get_variety'
+AND wine.wine_id = wine_varietyz.wine_id
+AND itemz.qty >= '$get_ordered'
 AND wine.year <= '$get_max_year'
 AND wine.year >= '$get_min_year'
+AND inventory.cost >= '$get_min_cost'
+AND inventory.cost <= '$get_max_cost'
 AND wine.wine_name LIKE '%" . ($_GET['winename']) . "%'
 AND winery.winery_name LIKE '%" . ($_GET['wineryname']) . "%'
 GROUP BY wine.wine_id");
@@ -155,9 +174,9 @@ while($row = mysqli_fetch_array($wineid)) {
   echo "<td>" . $row['year'] . "</td>";
   echo "<td>" . $row['winery_name'] . "</td>";
   echo "<td>" . $row['varietyz'] . "</td>";
-  echo "<td>" . $row['on_hand'] . "</td>";
+  echo "<td>" . $row['on_hand_corrected'] . "</td>";
   echo "<td>" . $row['region_name'] . "</td>";
-  echo "<td>" . $row['costz'] . " </td>";
+  echo "<td>" . $row['costzies'] . " </td>";
   echo "<td>" . $row['qty'] . " </td>";
   echo "<td>" . $row['price'] . " </td>";
   echo "</tr>";
