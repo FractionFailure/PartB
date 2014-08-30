@@ -10,10 +10,11 @@ if (mysqli_connect_errno()) {
   echo "Failed to connect to MySQL: " . mysqli_connect_error();
 }
 
+//The queries for the Dynamic Search boxes
 $region_query = mysqli_query($con, "SELECT DISTINCT region_name, region_id FROM region");
 $variety_query = mysqli_query($con, "SELECT DISTINCT variety, variety_id FROM grape_variety");
 $years_query = mysqli_query($con, "SELECT DISTINCT year FROM wine ORDER BY year");
-$years_duplicate_query = $years_query;
+
 
 //for the Dynamic region.
 function DynamicQueries($query_name, $functioned_query) {
@@ -40,7 +41,7 @@ echo "</select>";
 function DynamicYears($query_name, $functioned_query) {
 	echo "<select name={$query_name}>";
 
-echo "<option value='Unselected'> Year </option>";
+echo "<option value='Unselected'> Any </option>";
 
 	while($row = mysqli_fetch_array($functioned_query)) {
 		$queryResults = $row[0];
@@ -51,8 +52,37 @@ echo "</select>";
 ?>
 
 
+<?php //This is the start of the form. Used functions because i thought it would streamline the process. But when too many deviations
+// for each Dynamic query made it not worth the effort of reducing the code
 
-<form action="<?php echo $_SERVER['PHP_SELF']; ?>" method="GET">
+// Used GET due to forseeable use in later parts.i
+//Javascript for simple validation, works on onsubmit principle. If invalid, will not submit and display alert error message?>
+<script>
+function validate() {
+var check = 0;
+var year_min = document.forms["form"][4].value;
+var year_max = document.forms["form"][5].value;
+var cost_min = document.forms["form"][8].value;
+var cost_max = document.forms["form"][9].value;
+var text = "";
+
+if(year_min > year_max && year_max != "Unselected" && year_min != "Unselected"){
+text = "Minimum year exceeds Maximum year \n";
+check = 1;
+}
+if(cost_min > cost_max && cost_max != ""){
+text += "Minimum cost exceeds Maximum cost";
+check = 1;
+}
+if (check == 1){
+alert(text);
+return false;
+}
+return true;
+}
+</script>
+
+<form id="form" onsubmit="return validate()" action="<?php echo $_SERVER['PHP_SELF']; ?>" method="GET">
 Wine Name: <input type="text" name="winename"><br>
 Winery Name: <input type="text" name="wineryname"><br>
 <?php
@@ -62,9 +92,11 @@ echo "</br> Variety:";
 DynamicQueriesVariety("variety",$variety_query);
 echo "</br>Years:";
 DynamicYears("years_min", $years_query);
+//reseting  $years_query to 0 to allow for repeated use of query with fetch array
 mysqli_data_seek( $years_query, 0 );
 DynamicYears("years_max", $years_query);
 ?>
+<?php //type number restricts the values to numerals. Step defines the amount of decimal places allowed?>
 <br>
 Wine Stock: <input type="number" step=".01" name="stock"><br>
 Ordered: <input type="number" name="ordered"><br>
@@ -74,14 +106,19 @@ Max:<input type="number" step=".01" name="maxcost"><br>
 <input type="submit" name="submit" value="Run Query">
 </form>
 
+
 <?php
+
+//region will always be set, so it is used to define intiation of get_table
 if(isset($_GET['region'])) {
 
+//Would do some data validation here but not asked to do.
+//Just putting $GET variables to newly declared variables. Seemed like this would be a good idea in case something required the original info later.
+//Wine_name and winery_name went straight in because their data is unchanged regardless
 $get_region = $_GET["region"];
 if($get_region == 1){
 $get_region = "%";
 }
-
 
 $get_variety = $_GET["variety"];
 if($get_variety == "All"){
@@ -114,12 +151,7 @@ $get_stock = 0;}
 
 
 
-
-echo $get_stock;
-echo $_GET["years_max"];
-echo "<br>";
-echo $get_variety;
-echo $get_region;
+//THE ALL KNOWING SQL QUERY. retreives all rows then is limited by the get variables.
 $wineid = mysqli_query($con,"SELECT GROUP_CONCAT(DISTINCT grape_variety.variety SEPARATOR ', ') AS varietyz, wine.wine_id, wine.wine_name, winery.winery_name, wine.year, region.region_name, GROUP_CONCAT(DISTINCT inventory.cost SEPARATOR ', ') AS costz, inventoryz.costzies, inventoryz.on_hand_corrected, itemz.qty, itemz.price
 FROM wine, winery, (SELECT DISTINCT wine_id FROM wine_variety WHERE variety_id LIKE '$get_variety') AS wine_varietyz, wine_variety, grape_variety, inventory, region, (SELECT wine_id, SUM(qty) AS qty, SUM(price) AS price FROM items GROUP BY wine_id) AS itemz, (SELECT DISTINCT wine_id, GROUP_CONCAT(DISTINCT inventory.cost SEPARATOR ', ') as costzies, SUM(on_hand) AS on_hand_corrected FROM inventory GROUP BY wine_id) AS inventoryz
 WHERE wine.winery_id = winery.winery_id
@@ -141,19 +173,11 @@ AND wine.wine_name LIKE '%" . ($_GET['winename']) . "%'
 AND winery.winery_name LIKE '%" . ($_GET['wineryname']) . "%'
 GROUP BY wine.wine_id");
 
-
-/*$wineid = mysqli_query($con,"SELECT wine.wine_id, wine.wine_name, wine.year, winery.winery_name, GROUP_CONCAT(grape_variety.variety SEPARATOR ', ')
-FROM wine
-INNER JOIN winery
-ON wine.winery_id = winery.winery_id
-INNER JOIN wine_variety
-ON wine.wine_id = wine_variety.wine_id
-INNER JOIN grape_variety
-ON wine_variety.variety_id = grape_variety.variety_id
-GROUP BY wine.wine_id, wine.year, wine.wine_name");*/
-
-
-
+// If statment for to check whether anything was queried.
+if(mysqli_fetch_array($wineid)>0){
+//a reset due to if statement advancing position pointer in $wineid query
+mysqli_data_seek( $wineid, 0 );
+//intialize the table headers
 echo "<table border='1'>
 <tr>
 <th>wine_id</th>
@@ -167,6 +191,8 @@ echo "<table border='1'>
 <th>QTY</th>
 <th>price</th>
 </tr>";
+
+//Filling the table with queried data from $wineid query
 while($row = mysqli_fetch_array($wineid)) {
   echo "<tr>";
   echo "<td>" . $row['wine_id'] . "</td>";
@@ -183,6 +209,10 @@ while($row = mysqli_fetch_array($wineid)) {
 }
 
 echo "</table>";
+}
+else {
+echo "No records match your search criteria";
+}
 }
 mysqli_close($con);
  
